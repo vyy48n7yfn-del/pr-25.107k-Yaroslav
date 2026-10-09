@@ -1,0 +1,149 @@
+import schedule
+import time
+import logging
+import argparse
+from datetime import datetime
+
+==================== Настройка логирования ====================
+logging.basicConfig(
+filename="simple_scheduler.log",
+level=logging.INFO,
+format="%(asctime)s - %(message)s"
+)
+
+==================== Класс Task ====================
+class Task:
+def init(self, task_id, operation, filename, content=None,
+line_num=None, schedule=None):
+self.task_id = task_id
+self.operation = operation # 'create', 'append', 'delete_line'
+self.filename = filename
+self.content = content
+self.line_num = line_num
+self.schedule = schedule # 'daily:HH:MM', 'weekly:HH:MM',
+# 'once:HH:MM', 'interval:N'
+
+def __repr__(self):
+    return (f"<Task id={self.task_id}, operation={self.operation}, "
+            f"schedule={self.schedule}>")
+==================== Класс SimpleScheduler ====================
+class SimpleScheduler:
+def init(self):
+self.tasks = []
+self.next_id = 1
+
+def add_task(self, operation, filename, content=None,
+             line_num=None, schedule_time=None):
+    task = Task(self.next_id, operation, filename,
+                content, line_num, schedule_time)
+    self.tasks.append(task)
+    self.next_id += 1
+
+    if schedule_time:
+        # --- interval:N — каждые N секунд (для быстрой проверки) ---
+        if schedule_time.startswith("interval:"):
+            seconds = int(schedule_time.split(":")[1])
+            schedule.every(seconds).seconds.do(self.run_task, task)
+
+        # --- once:HH:MM — один раз в указанное время ---
+        elif schedule_time.startswith("once:"):
+            hh = schedule_time.split(":")[1]
+            mm = schedule_time.split(":")[2]
+            schedule.every().day.at(f"{hh}:{mm}").do(self.run_task, task)
+
+        # --- daily:HH:MM — каждый день ---
+        elif "daily" in schedule_time:
+            time_str = schedule_time.split(':')[1] + ":" + \
+                       schedule_time.split(':')[2]
+            schedule.every().day.at(time_str).do(self.run_task, task)
+
+        # --- weekly:HH:MM — раз в неделю ---
+        elif "weekly" in schedule_time:
+            time_str = schedule_time.split(':')[1] + ":" + \
+                       schedule_time.split(':')[2]
+            schedule.every().week.at(time_str).do(self.run_task, task)
+
+    print(f"Added task: {task}")
+
+def run_task(self, task):
+    try:
+        if task.operation == 'create':
+            with open(task.filename, 'w', encoding='utf-8') as f:
+                if task.content:
+                    f.write(task.content)
+            self.log_task(task, "Success")
+
+        elif task.operation == 'append':
+            with open(task.filename, 'a', encoding='utf-8') as f:
+                f.write(task.content + '\n')
+            self.log_task(task, "Success")
+
+        elif task.operation == 'delete_line':
+            with open(task.filename, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+            if task.line_num <= len(lines):
+                del lines[task.line_num - 1]
+                with open(task.filename, 'w', encoding='utf-8') as f:
+                    f.writelines(lines)
+                self.log_task(task, "Success")
+            else:
+                self.log_task(task, "Failed - Line number out of range")
+
+        else:
+            print("Unknown operation")
+
+    except Exception as e:
+        self.log_task(task, f"Failed - {str(e)}")
+
+def log_task(self, task, status):
+    logging.info(f"Task ID {task.task_id}: {task.operation} "
+                 f"on {task.filename} - Status: {status}")
+
+def start(self):
+    print("Scheduler started. Press Ctrl+C to stop.")
+    print(f"Current time: {datetime.now().strftime('%H:%M:%S')}")
+    try:
+        while True:
+            now = datetime.now().strftime("%H:%M:%S")
+            print(f"\r[{now}] Waiting... tasks: {len(self.tasks)}", end="")
+            schedule.run_pending()
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("\nScheduler stopped.")
+==================== CLI ====================
+def main():
+scheduler = SimpleScheduler()
+parser = argparse.ArgumentParser(description="Simple Text Scheduler")
+parser.add_argument("command", help="Command: add, view, start")
+parser.add_argument("--operation", help="create, append, delete_line")
+parser.add_argument("--filename", help="Filename to operate on")
+parser.add_argument("--content", help="Content to write or append")
+parser.add_argument("--line_num", type=int, help="Line number to delete")
+parser.add_argument("--schedule",
+help="daily:HH:MM | weekly:HH:MM | once:HH:MM | interval:N")
+args = parser.parse_args()
+
+if args.command == "add":
+    if args.operation and args.filename:
+        scheduler.add_task(
+            operation=args.operation,
+            filename=args.filename,
+            content=args.content,
+            line_num=args.line_num,
+            schedule_time=args.schedule
+        )
+    else:
+        print("Missing required arguments for adding a task")
+
+elif args.command == "view":
+    print("Scheduled tasks:")
+    for task in scheduler.tasks:
+        print(task)
+
+elif args.command == "start":
+    scheduler.start()
+
+else:
+    print("Unknown command")
+if name == "main":
+main()
